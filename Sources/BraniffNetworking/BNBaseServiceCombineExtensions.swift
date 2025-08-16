@@ -16,18 +16,21 @@ extension BNBaseService {
         
         Task { [subject] in
             do {
-                let requestSender = BNBaseService.defaultSender
-                let response = try await requestSender.perform(request: request)
+                let response = try await self.sender.perform(request: request)
                 subject.send(response)
                 return
             } catch let e as URLError {
                 logger.error("Failed to process URL for request: \(String(describing: R.self))\n\(dump(e))")
+                subject.send(completion: .failure(.urlError))
+                return
             } catch let e as DecodingError {
                 logger.error("Failed to decode response for request: \(String(describing: R.self))\nReason: \(e.failureReason ?? e.localizedDescription)")
+                subject.send(completion: .failure(.decodingError))
+                return
             } catch let e {
                 logger.error("Unknown error occured while performing request: \(String(describing: R.self))\nDescription: \(e.localizedDescription)")
             }
-            subject.send(completion: .failure(BNServiceError()))
+            subject.send(completion: .failure(.unknown))
         }
         return subject.first().eraseToAnyPublisher()
     }

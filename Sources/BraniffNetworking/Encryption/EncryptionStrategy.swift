@@ -7,11 +7,13 @@
 
 import Foundation
 
-internal struct EncryptionError: Error {
-    enum Reason {
+public struct EncryptionError: Error {
+    public enum Reason {
         case unknown
         case noStrategy
         case encryptionFailure(CFError)
+        case canNotValidate
+        case couldNotDecrypt(data: Data)
     }
     var reason: Reason
     
@@ -23,6 +25,10 @@ internal struct EncryptionError: Error {
             return "No strategy set for encryption"
         case let .encryptionFailure(error):
             return error.localizedDescription
+        case .canNotValidate:
+            return "Can't validate data received"
+        case .couldNotDecrypt:
+            return "Can't decrypte data received"
         }
     }
 }
