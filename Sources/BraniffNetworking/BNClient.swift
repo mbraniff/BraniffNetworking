@@ -8,7 +8,6 @@
 import Foundation
 import CryptoKit
 import OSLog
-import BraniffNetworking
 
 @available(iOS 13.0.0, *)
 protocol BNRequestSender: AnyObject {
@@ -29,13 +28,15 @@ public final class BNClient: BNRequestSender {
         var defaultRequestTimeout: TimeInterval
         var failureHandler: BNRequestFailureHandler?
         var serial: Bool
+        var decoder: JSONDecoder
         
-        public init(url: URL, encryptionStrategy: EncryptionStrategy? = nil, defaultRequestTimeout: TimeInterval = 60, failureHandler: BNRequestFailureHandler? = nil, serial: Bool = false) {
+        public init(url: URL, encryptionStrategy: EncryptionStrategy? = nil, defaultRequestTimeout: TimeInterval = 60, failureHandler: BNRequestFailureHandler? = nil, serial: Bool = false, decoder: JSONDecoder? = nil) {
             self.url = url
             self.encryptionStrategy = encryptionStrategy
             self.defaultRequestTimeout = defaultRequestTimeout
             self.failureHandler = failureHandler
             self.serial = serial
+            self.decoder = decoder ?? JSONDecoder()
         }
     }
     private var logger = Logger.bnLogs
@@ -117,7 +118,7 @@ public final class BNClient: BNRequestSender {
         
         self.logResponse(data)
         
-        let decoder = JSONDecoder()
+        let decoder = self.config.decoder
         
         var requestResponse: R.ResponseType
         do {
