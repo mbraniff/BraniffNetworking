@@ -29,14 +29,24 @@ public final class BNClient: BNRequestSender {
         var failureHandler: BNRequestFailureHandler?
         var serial: Bool
         var decoder: JSONDecoder
+        var loggingEnabled: Bool
         
-        public init(url: URL, encryptionStrategy: EncryptionStrategy? = nil, defaultRequestTimeout: TimeInterval = 60, failureHandler: BNRequestFailureHandler? = nil, serial: Bool = false, decoder: JSONDecoder? = nil) {
+        public init(
+            url: URL,
+            encryptionStrategy: EncryptionStrategy? = nil,
+            defaultRequestTimeout: TimeInterval = 60,
+            failureHandler: BNRequestFailureHandler? = nil,
+            serial: Bool = false,
+            decoder: JSONDecoder? = nil,
+            loggingEnabled: Bool = true
+        ) {
             self.url = url
             self.encryptionStrategy = encryptionStrategy
             self.defaultRequestTimeout = defaultRequestTimeout
             self.failureHandler = failureHandler
             self.serial = serial
             self.decoder = decoder ?? JSONDecoder()
+            self.loggingEnabled = loggingEnabled
         }
     }
     private var logger = Logger.bnLogs
@@ -89,7 +99,9 @@ public final class BNClient: BNRequestSender {
         request.configureRequest(urlRequest: &urlRequest)
         urlRequest.httpMethod = request.method.name
         
-        self.logRequest(urlRequest)
+        Task {
+            await self.logRequest(urlRequest)
+        }
         
         if request.encrypted {
             guard self.config.encryptionStrategy != nil else { throw EncryptionError(reason: .noStrategy) }
@@ -116,7 +128,9 @@ public final class BNClient: BNRequestSender {
             }
         }
         
-        self.logResponse(data)
+        Task {
+            await self.logResponse(data)
+        }
         
         let decoder = self.config.decoder
         
@@ -130,7 +144,8 @@ public final class BNClient: BNRequestSender {
         return requestResponse
     }
     
-    private func logRequest(_ request: URLRequest) {
+    @concurrent
+    private func logRequest(_ request: URLRequest) async {
         logger.info("""
         Processing Request: \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "")
         
@@ -139,7 +154,8 @@ public final class BNClient: BNRequestSender {
         )
     }
     
-    private func logResponse(_ response: Data) {
+    @concurrent
+    private func logResponse(_ response: Data) async {
         logger.info("""
         Received Response Body:
         \(String(data: response, encoding: .utf8) ?? "")
