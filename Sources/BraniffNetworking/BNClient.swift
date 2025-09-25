@@ -21,13 +21,12 @@ public protocol BNRequestFailureHandler: AnyObject {
 }
 
 @available(iOS 14.0.0, *)
-public final class BNClient: BNRequestSender {
+public final class BNClient: BNRequestSender, @unchecked Sendable {
     public class Config {
         var url: URL
         public var encryptionStrategy: EncryptionStrategy?
         var defaultRequestTimeout: TimeInterval
         var failureHandler: BNRequestFailureHandler?
-        var serial: Bool
         var decoder: JSONDecoder
         var loggingEnabled: Bool
         
@@ -36,7 +35,6 @@ public final class BNClient: BNRequestSender {
             encryptionStrategy: EncryptionStrategy? = nil,
             defaultRequestTimeout: TimeInterval = 60,
             failureHandler: BNRequestFailureHandler? = nil,
-            serial: Bool = false,
             decoder: JSONDecoder? = nil,
             loggingEnabled: Bool = true
         ) {
@@ -44,7 +42,6 @@ public final class BNClient: BNRequestSender {
             self.encryptionStrategy = encryptionStrategy
             self.defaultRequestTimeout = defaultRequestTimeout
             self.failureHandler = failureHandler
-            self.serial = serial
             self.decoder = decoder ?? JSONDecoder()
             self.loggingEnabled = loggingEnabled
         }
@@ -57,20 +54,42 @@ public final class BNClient: BNRequestSender {
         operationQueue.maxConcurrentOperationCount = 1
         return operationQueue
     }()
+    private lazy var concurrentQueue = OperationQueue()
+    internal var queueSemaphore = DispatchSemaphore(value: 1)
     
     public init(config: Config) {
         self.config = config
     }
     
     public func flush() {
-        guard config.serial else { return }
-        
+        self.concurrentQueue.cancelAllOperations()
         self.serialQueue.cancelAllOperations()
+        self.queueSemaphore = DispatchSemaphore(value: 1)
     }
     
     public func perform<R: BNRequest>(request: R) async throws -> R.ResponseType {
-        guard config.serial else { return try await _perform(request: request) }
+        guard request.serial else { return try await performAsync(request: request) }
     
+        return try await performSerial(request: request)
+    }
+    
+    internal func performAsync<R: BNRequest>(request: R) async throws -> R.ResponseType {
+        return try await withCheckedThrowingContinuation { continuation in
+            concurrentQueue.addOperation {
+                self.queueSemaphore.wait()
+                self.queueSemaphore.signal()
+                Task {
+                    do {
+                        continuation.resume(returning: try await self._perform(request: request))
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+        }
+    }
+    
+    internal func performSerial<R: BNRequest>(request: R) async throws -> R.ResponseType {
         return try await withCheckedThrowingContinuation { continuation in
             let operation = RequestOperation(request: request, client: self)
             
@@ -90,7 +109,6 @@ public final class BNClient: BNRequestSender {
             
             self.serialQueue.addOperation(operation)
         }
-        
     }
     
     internal func _perform<R: BNRequest>(request: R) async throws -> R.ResponseType {

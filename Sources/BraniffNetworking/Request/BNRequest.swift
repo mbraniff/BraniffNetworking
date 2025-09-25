@@ -33,15 +33,17 @@ public protocol BNRequest {
     var endpoint: String { get }
     var method: BNRequestMethod { get }
     var encrypted: Bool { get }
+    var serial: Bool { get }
     func configureRequest(urlRequest: inout URLRequest)
 }
 
 @available(iOS 13.0.0, *)
 public extension BNRequest {
-    public var method: BNRequestMethod { .get }
-    public var encrypted: Bool { true }
+    var method: BNRequestMethod { .get }
+    var encrypted: Bool { true }
+    var serial: Bool { false }
     
-    public func dataForParameters(_ parameters: [String: Any]) -> Data? {
+    func dataForParameters(_ parameters: [String: Any]) -> Data? {
         return try? JSONSerialization.data(withJSONObject: parameters)
     }
 }

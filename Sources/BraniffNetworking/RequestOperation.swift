@@ -7,7 +7,7 @@
 
 import Foundation
 
-class RequestOperation<R: BNRequest>: Operation {
+class RequestOperation<R: BNRequest>: Operation, @unchecked Sendable {
     private let request: R
     private let client: BNClient
     private var result: Result<R.ResponseType, Error>?
@@ -23,7 +23,7 @@ class RequestOperation<R: BNRequest>: Operation {
             result = .failure(CancellationError())
             return
         }
-        
+        self.client.queueSemaphore.wait()
         // Run the async _perform method synchronously
         let semaphore = DispatchSemaphore(value: 0)
         Task {
@@ -36,6 +36,7 @@ class RequestOperation<R: BNRequest>: Operation {
             semaphore.signal()
         }
         semaphore.wait()
+        self.client.queueSemaphore.signal()
     }
     
     // Method to get the result after completion
